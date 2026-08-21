@@ -351,6 +351,7 @@ body{padding-top:var(--safe-top)}
 
 <!-- SCREEN 1: HOME -->
 <div class="screen active" id="screenHome">
+  <div id="disciplineTabsHome" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
   <div class="section-label">Favoriten</div>
   <div class="fav-grid" id="favGrid"></div>
 
@@ -472,9 +473,35 @@ body{padding-top:var(--safe-top)}
   <div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
     <h3>Favoriten bearbeiten</h3>
     <p>Konfiguriere bis zu 4 Favoriten. Tippe im Homescreen auf einen Favoriten, um direkt zu starten.</p>
+    <div id="favEditorDisciplineTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div id="favEditorSlots"></div>
     <button class="btn-primary" onclick="saveFavs()">Favoriten speichern</button>
     <button class="btn-secondary" onclick="closeFavEditor()">Abbrechen</button>
+  </div>
+</div>
+
+<!-- DISCIPLINE MANAGER MODAL -->
+<div class="modal-overlay hidden" id="disciplineManagerModal">
+  <div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
+    <h3>Disziplinen verwalten</h3>
+    <p>Lege eigene Disziplinen an (z. B. "Blank", "Trad", "Olympic"), um Favoriten und Statistik zu trennen.</p>
+    <div id="disciplineManagerList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px" id="disciplineAddRow">
+      <input type="text" id="newDisciplineName" placeholder="Name der neuen Disziplin" maxlength="24"
+        style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Sora',sans-serif;font-size:13px">
+      <button class="btn-primary" style="margin:0;width:auto;padding:0 16px" onclick="addDiscipline()">+ Hinzufügen</button>
+    </div>
+    <button class="btn-secondary" onclick="closeDisciplineManager()">Fertig</button>
+  </div>
+</div>
+
+<!-- DISCIPLINE DELETE MODAL -->
+<div class="modal-overlay hidden" id="disciplineDeleteModal">
+  <div class="modal-sheet" style="padding:20px 16px 16px">
+    <h3 id="disciplineDeleteTitle" style="margin-bottom:4px">Disziplin löschen</h3>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Favoriten dieser Disziplin werden in jedem Fall gelöscht.</p>
+    <div style="display:flex;flex-direction:column;gap:8px" id="disciplineDeleteOptions"></div>
+    <button class="btn-secondary" style="margin-top:10px" onclick="closeDisciplineDelete()">Abbrechen</button>
   </div>
 </div>
 
@@ -538,6 +565,8 @@ body{padding-top:var(--safe-top)}
 // ── STATE ──────────────────────────────────────────────────────────────
 const LS_FAVS = 'bogen_favs';
 const LS_SESSIONS = 'bogen_sessions';
+const LS_DISCIPLINES = 'bogen_disciplines';
+const LS_ACTIVE_DISCIPLINE = 'bogen_active_discipline';
 
 let favs = JSON.parse(localStorage.getItem(LS_FAVS) || 'null') || [
   {mode:'WA', arrows:3, ends:10, dist:18},
@@ -546,6 +575,8 @@ let favs = JSON.parse(localStorage.getItem(LS_FAVS) || 'null') || [
   null
 ];
 let sessions = JSON.parse(localStorage.getItem(LS_SESSIONS) || '[]');
+let disciplines = JSON.parse(localStorage.getItem(LS_DISCIPLINES) || 'null') || [{id: 1, name: 'Standard'}];
+let activeDiscipline = parseInt(localStorage.getItem(LS_ACTIVE_DISCIPLINE) || '1');
 
 let currentCfg = {mode:'WA', arrows:3, ends:10, dist:10};
 let activeSession = null; // {cfg, passes:[], currentPass:[]}
@@ -560,6 +591,22 @@ let favEditorData = null;
 function save() {
   localStorage.setItem(LS_FAVS, JSON.stringify(favs));
   localStorage.setItem(LS_SESSIONS, JSON.stringify(sessions));
+  localStorage.setItem(LS_DISCIPLINES, JSON.stringify(disciplines));
+}
+
+function migrateDisciplines() {
+  let changed = false;
+  favs.forEach(f => { if (f && f.disciplineId == null) { f.disciplineId = 1; changed = true; } });
+  sessions.forEach(s => { if (s.disciplineId == null) { s.disciplineId = 1; changed = true; } });
+  if (changed) save();
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function sanitizeDisciplineName(name) {
+  return name.trim().replace(/[,"|;]/g, '');
 }
 
 function showToast(msg, ms=1800) {
@@ -596,7 +643,9 @@ function updateHeader() {
     hActions.innerHTML = '';
   } else if (currentScreen === 'stats') {
     title.textContent = '📊 Statistik';
-    sub.textContent = sessions.length + ' Sitzungen';
+    const activeName = disciplines.length > 1 ? (disciplines.find(d => d.id === activeDiscipline)?.name || '') : '';
+    const n = sessions.filter(s => (s.disciplineId || 1) === activeDiscipline).length;
+    sub.textContent = (activeName ? activeName + ' · ' : '') + n + ' Sitzungen';
     hActions.innerHTML = `<button class="icon-btn" onclick="showScreen('Home')">✕</button>`;
   }
 }
@@ -641,11 +690,27 @@ function syncSegGroup(key, val) {
   });
 }
 
+// ── DISCIPLINE TABS (HOME) ──────────────────────────────────────────────
+function renderDisciplineTabsHome() {
+  const wrap = document.getElementById('disciplineTabsHome');
+  if (disciplines.length <= 1) { wrap.innerHTML = ''; return; }
+  wrap.innerHTML = disciplines.map(d => `
+    <button class="filter-btn ${d.id === activeDiscipline ? 'active' : ''}" onclick="setActiveDiscipline(${d.id})">${escapeHtml(d.name)}</button>
+  `).join('');
+}
+
+function setActiveDiscipline(id) {
+  activeDiscipline = id;
+  localStorage.setItem(LS_ACTIVE_DISCIPLINE, String(id));
+  renderDisciplineTabsHome();
+  renderFavGrid();
+}
+
 // ── FAV GRID ───────────────────────────────────────────────────────────
 function renderFavGrid() {
   const g = document.getElementById('favGrid');
   g.innerHTML = '';
-  favs.forEach((fav, i) => {
+  favs.filter(fav => !fav || (fav.disciplineId || 1) === activeDiscipline).forEach((fav) => {
     const btn = document.createElement('button');
     const empty = isFavEmpty(fav);
     btn.className = 'fav-btn ' + (empty ? 'empty' : 'filled') + (empty ? '' : ` dist-${fav.dist||18}`);
@@ -655,7 +720,7 @@ function renderFavGrid() {
         <div class="fav-detail"><span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.ends}</span>×<span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.arrows}</span> Pfeile · <span class="fav-dist-badge">${fav.dist||18}m</span></div>`;
       btn.onclick = () => startSession(fav);
     } else {      btn.innerHTML = `<div class="fav-empty-label">+ Fav</div>`;
-      btn.onclick = () => showFavEditor(i);
+      btn.onclick = () => showFavEditor();
     }
     g.appendChild(btn);
   });
@@ -667,12 +732,36 @@ const FAV_DEFAULT = {mode:'WA', arrows:3, ends:10, dist:10};
 
 function isFavEmpty(f) { return !f || f.mode === null; }
 
-function showFavEditor(focusSlot) {
-  favEditorData = favs.map(f => isFavEmpty(f) ? {...FAV_EMPTY} : {...f});
-  // ensure even number of slots
-  if (favEditorData.length % 2 !== 0) favEditorData.push({...FAV_EMPTY});
+let favEditorActiveTab = null; // which discipline tab is open inside the fav editor
+
+function showFavEditor() {
+  favEditorActiveTab = activeDiscipline;
+  renderDisciplineTabs();
+  loadFavEditorDataForTab();
   renderFavEditorSlots();
   document.getElementById('favEditorModal').classList.remove('hidden');
+}
+
+function loadFavEditorDataForTab() {
+  const scoped = favs.filter(f => f && (f.disciplineId || 1) === favEditorActiveTab).map(f => ({...f}));
+  favEditorData = scoped.length ? scoped : [{...FAV_EMPTY}, {...FAV_EMPTY}];
+  if (favEditorData.length % 2 !== 0) favEditorData.push({...FAV_EMPTY});
+}
+
+function renderDisciplineTabs() {
+  const wrap = document.getElementById('favEditorDisciplineTabs');
+  const tabs = disciplines.length > 1
+    ? disciplines.map(d => `<button class="filter-btn ${favEditorActiveTab === d.id ? 'active' : ''}" onclick="setFavEditorTab(${d.id})">${escapeHtml(d.name)}</button>`).join('')
+    : '';
+  wrap.innerHTML = tabs + `<button class="filter-btn" onclick="showDisciplineManager()">⚙ Verwalten</button>`;
+}
+
+function setFavEditorTab(id) {
+  saveFavs(false); // persist the outgoing tab's edits silently before switching
+  favEditorActiveTab = id;
+  renderDisciplineTabs();
+  loadFavEditorDataForTab();
+  renderFavEditorSlots();
 }
 
 function renderFavEditorSlots() {
@@ -805,22 +894,103 @@ function clearFavSlot(idx) {
   renderFavEditorSlots();
 }
 
-function saveFavs() {
-  favs = favEditorData.map(f => isFavEmpty(f) ? null : f);
+function saveFavs(closeModal = true) {
+  const kept = favEditorData.filter(f => !isFavEmpty(f)).map(f => ({...f, disciplineId: favEditorActiveTab}));
+  favs = favs.filter(f => !f || (f.disciplineId || 1) !== favEditorActiveTab).concat(kept);
   save();
   renderFavGrid();
-  closeFavEditor();
-  showToast('Favoriten gespeichert ✓');
+  renderDisciplineTabsHome();
+  if (closeModal) { closeFavEditor(); showToast('Favoriten gespeichert ✓'); }
 }
 
 function closeFavEditor() {
   document.getElementById('favEditorModal').classList.add('hidden');
 }
 
+// ── DISCIPLINE MANAGEMENT ──────────────────────────────────────────────
+function showDisciplineManager() {
+  renderDisciplineManagerList();
+  document.getElementById('disciplineManagerModal').classList.remove('hidden');
+}
+function closeDisciplineManager() {
+  document.getElementById('disciplineManagerModal').classList.add('hidden');
+  renderDisciplineTabs();
+  loadFavEditorDataForTab();
+  renderFavEditorSlots();
+  renderDisciplineTabsHome();
+  renderFavGrid();
+}
+
+function renderDisciplineManagerList() {
+  const list = document.getElementById('disciplineManagerList');
+  list.innerHTML = disciplines.map(d => `
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="text" value="${escapeHtml(d.name)}" maxlength="24"
+        style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-family:'Sora',sans-serif;font-size:13px"
+        onchange="renameDiscipline(${d.id}, this.value)">
+      ${disciplines.length > 1
+        ? `<button onclick="startDeleteDiscipline(${d.id})" style="padding:8px 10px;border-radius:8px;background:transparent;border:1px solid rgba(255,90,90,0.3);color:var(--danger);cursor:pointer">🗑</button>`
+        : ''}
+    </div>`).join('');
+  document.getElementById('disciplineAddRow').style.display = disciplines.length >= 6 ? 'none' : 'flex';
+}
+
+function addDiscipline() {
+  if (disciplines.length >= 6) { showToast('Maximal 6 Disziplinen'); return; }
+  const input = document.getElementById('newDisciplineName');
+  const name = sanitizeDisciplineName(input.value);
+  if (!name) return;
+  disciplines.push({id: Math.max(...disciplines.map(d => d.id), 0) + 1, name});
+  save();
+  input.value = '';
+  renderDisciplineManagerList();
+  showToast('Disziplin hinzugefügt ✓');
+}
+
+function renameDiscipline(id, name) {
+  name = sanitizeDisciplineName(name);
+  const d = disciplines.find(d => d.id === id);
+  if (d && name) { d.name = name; save(); renderDisciplineTabs(); }
+  renderDisciplineManagerList();
+}
+
+function startDeleteDiscipline(id) {
+  const target = disciplines.find(d => d.id === id);
+  const others = disciplines.filter(d => d.id !== id);
+  document.getElementById('disciplineDeleteTitle').textContent = `"${target.name}" löschen`;
+  const opts = document.getElementById('disciplineDeleteOptions');
+  opts.innerHTML = '';
+  const mkOpt = (label, onClick) => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `width:100%;padding:12px 14px;border-radius:10px;text-align:left;font-size:14px;font-family:'Sora',sans-serif;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);touch-action:manipulation`;
+    btn.textContent = label;
+    btn.onclick = onClick;
+    opts.appendChild(btn);
+  };
+  mkOpt('🗑 Sitzungen dieser Disziplin löschen', () => executeDeleteDiscipline(id, null));
+  others.forEach(o => mkOpt(`➡ Sitzungen zu "${o.name}" verschieben`, () => executeDeleteDiscipline(id, o.id)));
+  document.getElementById('disciplineDeleteModal').classList.remove('hidden');
+}
+function closeDisciplineDelete() {
+  document.getElementById('disciplineDeleteModal').classList.add('hidden');
+}
+
+function executeDeleteDiscipline(deletedId, moveToId) {
+  if (moveToId) sessions.forEach(s => { if (s.disciplineId === deletedId) s.disciplineId = moveToId; });
+  else sessions = sessions.filter(s => s.disciplineId !== deletedId);
+  favs = favs.filter(f => !f || f.disciplineId !== deletedId);
+  disciplines = disciplines.filter(d => d.id !== deletedId);
+  if (activeDiscipline === deletedId) setActiveDiscipline(disciplines[0].id);
+  save();
+  closeDisciplineDelete();
+  renderDisciplineManagerList();
+  showToast('Disziplin gelöscht ✓');
+}
+
 // ── SESSION START ──────────────────────────────────────────────────────
 function startSession(cfg) {
   activeSession = {
-    cfg: {...cfg},
+    cfg: {...cfg, disciplineId: cfg.disciplineId || activeDiscipline},
     passes: [],
     currentPass: [],
     startedAt: new Date().toISOString()
@@ -1023,6 +1193,7 @@ function saveSession() {
   const record = {
     id: Date.now(),
     date: new Date().toISOString(),
+    disciplineId: s.cfg.disciplineId || activeDiscipline,
     mode: s.cfg.mode,
     dist: s.cfg.dist || 0,
     arrows: s.cfg.arrows,
@@ -1038,6 +1209,7 @@ function saveSession() {
   activeSession = null;
   showToast('Sitzung gespeichert ✓');
   showScreen('Home');
+  renderDisciplineTabsHome();
   renderFavGrid();
 }
 
@@ -1097,7 +1269,7 @@ document.getElementById('timeRangeModal').addEventListener('click', function(e) 
 });
 
 function filteredSessions() {
-  let s = sessions;
+  let s = sessions.filter(s => (s.disciplineId || 1) === activeDiscipline);
   if (timeRange > 0) {
     const cutoff = Date.now() - timeRange * 86400000;
     s = s.filter(s => new Date(s.date).getTime() >= cutoff);
@@ -1234,12 +1406,13 @@ function renderChart(fs) {
 // ── CSV EXPORT / IMPORT ────────────────────────────────────────────────
 function exportCSV() {
   if (!sessions.length) { showToast('Keine Sitzungen vorhanden'); return; }
-  const lines = ['datum,modus,pfeile,passen,gesamt,max,prozent,schnitt,passen_detail'];
+  const lines = ['datum,modus,pfeile,passen,gesamt,max,prozent,schnitt,passen_detail,disziplin'];
   sessions.forEach(s => {
     const detail = s.passes.map(p=>p.join('|')).join(';');
+    const discName = disciplines.find(d => d.id === (s.disciplineId || 1))?.name || 'Standard';
     lines.push([
       new Date(s.date).toLocaleDateString('de-DE'),
-      s.mode, s.arrows, s.ends, s.total, s.max, s.pct, s.avg, detail
+      s.mode, s.arrows, s.ends, s.total, s.max, s.pct, s.avg, detail, discName
     ].join(','));
   });
   const blob = new Blob([lines.join('\n')], {type:'text/csv'});
@@ -1262,9 +1435,20 @@ function importCSV(event) {
       if (cols.length < 9) return;
       const passesRaw = cols[8].split(';').map(p => p.split('|').map(v => isNaN(v)?v:parseInt(v)));
       const total = parseInt(cols[4]), mxs = parseInt(cols[5]);
+      let disciplineId = 1;
+      if (cols.length >= 10 && cols[9]) {
+        const name = sanitizeDisciplineName(cols[9]);
+        let d = disciplines.find(d => d.name === name);
+        if (!d && disciplines.length < 6) {
+          d = {id: Math.max(...disciplines.map(d=>d.id), 0) + 1, name};
+          disciplines.push(d);
+        }
+        disciplineId = d ? d.id : 1;
+      }
       sessions.push({
         id: Date.now() + count,
         date: new Date().toISOString(),
+        disciplineId,
         mode: cols[1], arrows: parseInt(cols[2]), ends: parseInt(cols[3]),
         passes: passesRaw, total, max: mxs,
         pct: Math.round(total/mxs*100), avg: parseFloat(cols[7])
@@ -1272,6 +1456,7 @@ function importCSV(event) {
       count++;
     });
     save();
+    renderDisciplineTabsHome();
     renderStats();
     showToast(count + ' Sitzungen importiert ✓');
   };
@@ -1289,11 +1474,13 @@ function showConfirm(title, body, onOk) {
 function closeConfirm() { document.getElementById('confirmModal').classList.add('hidden'); }
 
 // close modals on overlay tap
-['favEditorModal','pickerModal','confirmModal'].forEach(id => {
+['favEditorModal','pickerModal','confirmModal','disciplineManagerModal','disciplineDeleteModal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target === this) {
       if (id === 'favEditorModal') closeFavEditor();
       else if (id === 'pickerModal') closePicker();
+      else if (id === 'disciplineManagerModal') closeDisciplineManager();
+      else if (id === 'disciplineDeleteModal') closeDisciplineDelete();
       else closeConfirm();
     }
   });
@@ -1312,6 +1499,12 @@ document.getElementById('aboutModal').addEventListener('click', function(e) {
 });
 
 // ── INIT ───────────────────────────────────────────────────────────────
+migrateDisciplines();
+if (!disciplines.find(d => d.id === activeDiscipline)) {
+  activeDiscipline = disciplines[0].id;
+  localStorage.setItem(LS_ACTIVE_DISCIPLINE, String(activeDiscipline));
+}
+renderDisciplineTabsHome();
 renderFavGrid();
 updateHeader();
 // apply dist color to initially active button
