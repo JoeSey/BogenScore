@@ -246,6 +246,9 @@ body{padding-top:var(--safe-top)}
   background:var(--surface);border-radius:20px 20px 0 0;
   width:100%;max-width:480px;padding:20px 16px 16px;
 }
+.modal-sheet h1{font-size:18px;font-weight:700;margin-bottom:12px}
+.modal-sheet h2{font-size:11px;font-weight:600;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase;margin:18px 0 8px}
+.modal-sheet h2:first-of-type{margin-top:0}
 .modal-sheet h3{font-size:15px;font-weight:600;margin-bottom:4px}
 .modal-sheet p{font-size:12px;color:var(--text-muted);margin-bottom:14px}
 .modal-ring-grid{display:grid;gap:8px}
@@ -471,9 +474,11 @@ body{padding-top:var(--safe-top)}
 <!-- FAV EDITOR MODAL -->
 <div class="modal-overlay hidden" id="favEditorModal">
   <div class="modal-sheet" style="max-height:85vh;overflow-y:auto">
-    <h3>Favoriten bearbeiten</h3>
-    <p>Konfiguriere bis zu 4 Favoriten. Tippe im Homescreen auf einen Favoriten, um direkt zu starten.</p>
+    <h1>Einstellungen</h1>
+    <h2>Disziplinen</h2>
     <div id="favEditorDisciplineTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <h2>Favoriten</h2>
+    <p>Konfiguriere bis zu 4 Favoriten. Tippe im Homescreen auf einen Favoriten, um direkt zu starten.</p>
     <div id="favEditorSlots"></div>
     <button class="btn-primary" onclick="saveFavs()">Favoriten speichern</button>
     <button class="btn-secondary" onclick="closeFavEditor()">Abbrechen</button>
