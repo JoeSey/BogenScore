@@ -346,7 +346,7 @@ body{padding-top:var(--safe-top)}
 
 /* UPDATE BANNER */
 .update-banner{
-  position:fixed;left:12px;right:12px;bottom:calc(12px + var(--safe-bottom));z-index:400;
+  position:fixed;left:12px;right:12px;bottom:calc(64px + var(--safe-bottom));z-index:400;
   display:flex;align-items:center;gap:10px;
   background:var(--surface2);border:1px solid var(--border-active);border-radius:var(--radius);
   padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.4);
@@ -1564,9 +1564,12 @@ if ('serviceWorker' in navigator) {
   }
 
   updateBannerBtn.addEventListener('click', () => {
-    if (!waitingWorker) return;
     updateBannerBtn.disabled = true;
-    waitingWorker.postMessage('SKIP_WAITING');
+    if (waitingWorker) waitingWorker.postMessage('SKIP_WAITING');
+    // Navigations are network-first regardless of which worker ends up in
+    // control, so don't leave the user stuck if postMessage/controllerchange
+    // never resolves (e.g. an already-superseded waiting worker).
+    setTimeout(() => location.reload(), 300);
   });
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
