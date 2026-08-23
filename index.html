@@ -591,6 +591,10 @@ body{padding-top:var(--safe-top)}
       Gebaut für den SV BSG-Walzbachtal<br>
       von: Jörg, Cora und Claude 🏹
     </div>
+    <div style="margin-bottom:14px">
+      <button type="button" onclick="toggleSwDiag()" style="background:none;border:none;color:var(--text-dim);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;font-family:'Sora',sans-serif">PWA-Diagnose anzeigen</button>
+      <pre id="swDiag" class="hidden" style="margin-top:8px;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;background:var(--surface2);border-radius:8px;padding:10px;color:var(--text-muted);max-height:200px;overflow:auto;font-family:'DM Mono',monospace"></pre>
+    </div>
     <button class="btn-primary" style="margin-top:0" onclick="closeAbout()">Los geht's →</button>
   </div>
 </div>
@@ -1555,6 +1559,52 @@ updateHeader();
 document.querySelector(`[data-cfg="dist"][data-val="${currentCfg.dist}"]`)?.classList.add(`dist-${currentCfg.dist}`);
 if (!localStorage.getItem('bogen_seen')) showAbout();
 
+// ── PWA DIAGNOSTICS (temporary — tracking down the iOS update-banner bug) ──
+// Persisted so the log survives the very reload we're trying to debug.
+const LS_SW_LOG = 'bogen_sw_log';
+function logSW(msg) {
+  const log = JSON.parse(localStorage.getItem(LS_SW_LOG) || '[]');
+  log.push(new Date().toISOString().slice(11, 19) + ' ' + msg);
+  while (log.length > 50) log.shift();
+  localStorage.setItem(LS_SW_LOG, JSON.stringify(log));
+}
+window.addEventListener('error', (e) => logSW(`JS ERROR: ${e.message} @ ${e.filename}:${e.lineno}`));
+window.addEventListener('unhandledrejection', (e) => logSW(`PROMISE REJECTED: ${e.reason}`));
+
+async function renderSwDiag() {
+  const el = document.getElementById('swDiag');
+  const lines = [];
+  lines.push('controller: ' + (navigator.serviceWorker?.controller?.scriptURL || '–'));
+  if ('serviceWorker' in navigator) {
+    try {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      lines.push('registrations: ' + regs.length);
+      regs.forEach((r, i) => {
+        lines.push(`  [${i}] scope=${r.scope}`);
+        lines.push(`      installing=${!!r.installing} waiting=${!!r.waiting} active=${!!r.active}`);
+      });
+    } catch (e) { lines.push('getRegistrations failed: ' + e); }
+  } else {
+    lines.push('serviceWorker API nicht verfügbar');
+  }
+  if (window.caches) {
+    try {
+      const keys = await caches.keys();
+      lines.push('caches: ' + (keys.join(', ') || '–'));
+    } catch (e) { lines.push('caches.keys failed: ' + e); }
+  }
+  lines.push('', '— Log —');
+  const log = JSON.parse(localStorage.getItem(LS_SW_LOG) || '[]');
+  lines.push(...(log.length ? log : ['(leer)']));
+  el.textContent = lines.join('\n');
+}
+
+function toggleSwDiag() {
+  const el = document.getElementById('swDiag');
+  el.classList.toggle('hidden');
+  if (!el.classList.contains('hidden')) renderSwDiag();
+}
+
 // ── SERVICE WORKER / AUTO-UPDATE ────────────────────────────────────────
 // activeSession lives only in memory (not persisted), so a reload while a
 // pass is in progress would drop unsaved arrows — always ask, never force.
@@ -1567,14 +1617,17 @@ if ('serviceWorker' in navigator) {
   // — postMessage to a waiting worker is unreliable on iOS Safari and left
   // the old banner stuck forever.
   const hadController = !!navigator.serviceWorker.controller;
+  logSW(`load: hadController=${hadController}`);
 
   // Always escapable: whatever goes wrong with the reload below, the banner
   // itself must never be able to get permanently stuck on screen.
   updateBannerDismiss.addEventListener('click', () => {
+    logSW('dismiss clicked');
     updateBanner.classList.remove('show');
   });
 
   updateBannerBtn.addEventListener('click', () => {
+    logSW('update clicked, reloading');
     updateBannerBtn.textContent = '…';
     location.reload();
   });
@@ -1583,18 +1636,20 @@ if ('serviceWorker' in navigator) {
     // A fresh install also fires this once (no controller -> first controller)
     // — that's not an "update" the user needs to act on, so only prompt when
     // an already-controlled page got handed to a newer worker.
+    logSW(`controllerchange: hadController=${hadController} -> ${hadController ? 'showing banner' : 'ignored (fresh install)'}`);
     if (hadController) updateBanner.classList.add('show');
   });
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then((reg) => {
+      logSW(`register ok: scope=${reg.scope} installing=${!!reg.installing} waiting=${!!reg.waiting} active=${!!reg.active}`);
       // iOS standalone apps never run in the background, so the only
       // reliable moment to check for a new version is when the app is
       // brought back to the foreground.
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') reg.update();
       });
-    }).catch(() => {});
+    }).catch((err) => logSW(`register FAILED: ${err}`));
   });
 }
 </script>
