@@ -839,10 +839,10 @@ function renderFavEditorSlots() {
         <div class="config-row" style="padding:5px 0">
           <span class="config-label" style="font-size:11px">Dist.</span>
           <div class="seg-group" style="flex-wrap:wrap;justify-content:flex-end;gap:2px">
-            <button class="seg-btn ${(f.dist||18)===10?'active dist-10':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',10,this)">10</button>
-            <button class="seg-btn ${(f.dist||18)===18?'active dist-18':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',18,this)">18</button>
-            <button class="seg-btn ${(f.dist||18)===30?'active dist-30':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',30,this)">30</button>
-            <button class="seg-btn ${(f.dist||18)===40?'active dist-40':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',40,this)">40</button>
+            <button class="seg-btn ${!empty && (f.dist||18)===10?'active dist-10':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',10,this)">10</button>
+            <button class="seg-btn ${!empty && (f.dist||18)===18?'active dist-18':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',18,this)">18</button>
+            <button class="seg-btn ${!empty && (f.dist||18)===30?'active dist-30':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',30,this)">30</button>
+            <button class="seg-btn ${!empty && (f.dist||18)===40?'active dist-40':''}" style="padding:4px 7px;font-size:11px" onclick="setFavCfg(${i},'dist',40,this)">40</button>
           </div>
         </div>
         <div class="config-row" style="padding:5px 0">
