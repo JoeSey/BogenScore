@@ -346,13 +346,13 @@ body{padding-top:var(--safe-top)}
 
 /* UPDATE BANNER */
 .update-banner{
+  display:none;
   position:fixed;left:12px;right:12px;bottom:calc(64px + var(--safe-bottom));z-index:400;
-  display:flex;align-items:center;gap:10px;
+  align-items:center;gap:10px;
   background:var(--surface2);border:1px solid var(--border-active);border-radius:var(--radius);
   padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.4);
-  transform:translateY(120%);transition:transform 0.25s ease;
 }
-.update-banner.show{transform:translateY(0)}
+.update-banner.show{display:flex}
 .update-banner span{flex:1;font-size:13px;color:var(--text)}
 .update-banner button{
   border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;
@@ -593,7 +593,7 @@ body{padding-top:var(--safe-top)}
     </div>
     <div style="margin-bottom:14px">
       <button type="button" onclick="toggleSwDiag()" style="background:none;border:none;color:var(--text-dim);font-size:11px;text-decoration:underline;cursor:pointer;padding:0;font-family:'Sora',sans-serif">PWA-Diagnose anzeigen</button>
-      <pre id="swDiag" class="hidden" style="margin-top:8px;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;background:var(--surface2);border-radius:8px;padding:10px;color:var(--text-muted);max-height:200px;overflow:auto;font-family:'DM Mono',monospace"></pre>
+      <pre id="swDiag" hidden style="margin-top:8px;font-size:10px;line-height:1.5;white-space:pre-wrap;word-break:break-all;background:var(--surface2);border-radius:8px;padding:10px;color:var(--text-muted);max-height:200px;overflow:auto;font-family:'DM Mono',monospace"></pre>
     </div>
     <button class="btn-primary" style="margin-top:0" onclick="closeAbout()">Los geht's →</button>
   </div>
@@ -1601,8 +1601,8 @@ async function renderSwDiag() {
 
 function toggleSwDiag() {
   const el = document.getElementById('swDiag');
-  el.classList.toggle('hidden');
-  if (!el.classList.contains('hidden')) renderSwDiag();
+  el.hidden = !el.hidden;
+  if (!el.hidden) renderSwDiag();
 }
 
 // ── SERVICE WORKER / AUTO-UPDATE ────────────────────────────────────────
