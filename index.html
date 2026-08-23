@@ -359,6 +359,10 @@ body{padding-top:var(--safe-top)}
   background:var(--accent);color:#0f0f11;cursor:pointer;
 }
 .update-banner button:active{transform:scale(0.95)}
+.update-banner button:disabled{opacity:0.6}
+#updateBannerDismiss{
+  background:transparent;color:var(--text-muted);padding:8px 10px;font-weight:400;
+}
 </style>
 </head>
 <body>
@@ -366,6 +370,7 @@ body{padding-top:var(--safe-top)}
 <div class="update-banner" id="updateBanner">
   <span>Neue Version verfügbar</span>
   <button id="updateBannerBtn" type="button">Aktualisieren</button>
+  <button id="updateBannerDismiss" type="button" title="Schließen" aria-label="Schließen">✕</button>
 </div>
 
 <!-- HEADER -->
@@ -1556,14 +1561,21 @@ if (!localStorage.getItem('bogen_seen')) showAbout();
 if ('serviceWorker' in navigator) {
   const updateBanner = document.getElementById('updateBanner');
   const updateBannerBtn = document.getElementById('updateBannerBtn');
+  const updateBannerDismiss = document.getElementById('updateBannerDismiss');
   // sw.js self-activates (skipWaiting) instead of sitting in a "waiting"
   // state, so we just watch for the takeover rather than messaging a worker
   // — postMessage to a waiting worker is unreliable on iOS Safari and left
   // the old banner stuck forever.
   const hadController = !!navigator.serviceWorker.controller;
 
+  // Always escapable: whatever goes wrong with the reload below, the banner
+  // itself must never be able to get permanently stuck on screen.
+  updateBannerDismiss.addEventListener('click', () => {
+    updateBanner.classList.remove('show');
+  });
+
   updateBannerBtn.addEventListener('click', () => {
-    updateBannerBtn.disabled = true;
+    updateBannerBtn.textContent = '…';
     location.reload();
   });
 
