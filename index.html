@@ -603,8 +603,7 @@ const LS_ACTIVE_DISCIPLINE = 'bogen_active_discipline';
 let favs = JSON.parse(localStorage.getItem(LS_FAVS) || 'null') || [
   {mode:'WA', arrows:3, ends:10, dist:18},
   {mode:'DFBV', arrows:5, ends:6, dist:18},
-  {mode:'WA', arrows:6, ends:5, dist:18},
-  null
+  {mode:'WA', arrows:6, ends:5, dist:18}
 ];
 let sessions = JSON.parse(localStorage.getItem(LS_SESSIONS) || '[]');
 let disciplines = JSON.parse(localStorage.getItem(LS_DISCIPLINES) || 'null') || [{id: 1, name: 'Standard'}];
@@ -628,7 +627,11 @@ function save() {
 
 function migrateDisciplines() {
   let changed = false;
-  favs.forEach(f => { if (f && f.disciplineId == null) { f.disciplineId = 1; changed = true; } });
+  // Drop stray empty-slot entries from old data — they used to double as the
+  // grid's "+ Fav" placeholder, but that's now rendered on the fly instead.
+  const cleaned = favs.filter(f => !isFavEmpty(f));
+  if (cleaned.length !== favs.length) { favs = cleaned; changed = true; }
+  favs.forEach(f => { if (f.disciplineId == null) { f.disciplineId = 1; changed = true; } });
   sessions.forEach(s => { if (s.disciplineId == null) { s.disciplineId = 1; changed = true; } });
   if (changed) save();
 }
@@ -742,20 +745,24 @@ function setActiveDiscipline(id) {
 function renderFavGrid() {
   const g = document.getElementById('favGrid');
   g.innerHTML = '';
-  favs.filter(fav => !fav || (fav.disciplineId || 1) === activeDiscipline).forEach((fav) => {
+  const scoped = favs.filter(fav => (fav.disciplineId || 1) === activeDiscipline);
+  scoped.forEach((fav) => {
     const btn = document.createElement('button');
-    const empty = isFavEmpty(fav);
-    btn.className = 'fav-btn ' + (empty ? 'empty' : 'filled') + (empty ? '' : ` dist-${fav.dist||18}`);
-    if (!empty) {
-      btn.innerHTML = `
-        <div class="fav-mode">${fav.mode}</div>
-        <div class="fav-detail"><span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.ends}</span>×<span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.arrows}</span> Pfeile · <span class="fav-dist-badge">${fav.dist||18}m</span></div>`;
-      btn.onclick = () => startSession(fav);
-    } else {      btn.innerHTML = `<div class="fav-empty-label">+ Fav</div>`;
-      btn.onclick = () => showFavEditor();
-    }
+    btn.className = `fav-btn filled dist-${fav.dist||18}`;
+    btn.innerHTML = `
+      <div class="fav-mode">${fav.mode}</div>
+      <div class="fav-detail"><span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.ends}</span>×<span style="color:var(--accent);font-family:'DM Mono',monospace;font-weight:500">${fav.arrows}</span> Pfeile · <span class="fav-dist-badge">${fav.dist||18}m</span></div>`;
+    btn.onclick = () => startSession(fav);
     g.appendChild(btn);
   });
+  // Fill a dangling last row with a quick-add tile, bottom-right.
+  if (scoped.length % 2 !== 0) {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'fav-btn empty';
+    addBtn.innerHTML = `<div class="fav-empty-label">+ Fav</div>`;
+    addBtn.onclick = () => showFavEditor();
+    g.appendChild(addBtn);
+  }
 }
 
 // ── FAV EDITOR ─────────────────────────────────────────────────────────
