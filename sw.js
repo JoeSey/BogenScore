@@ -1,6 +1,6 @@
-// Bump this on every deploy so the browser detects a byte diff and installs
-// a new worker. That new-worker install is what drives the update banner in
-// index.html — nothing else about this file needs to change.
+// Any byte change to this file (or index.html/manifest.json below) makes the
+// browser detect a diff and install a new worker, which self-activates and
+// drives the update banner in index.html.
 const CACHE_VERSION = 'bogen-score-v1';
 const PRECACHE_URL = 'index.html';
 const PRECACHE_ASSETS = [
@@ -12,9 +12,14 @@ const PRECACHE_ASSETS = [
   'icons/apple-touch-icon.png',
 ];
 
+// Activate a new version immediately instead of sitting in "waiting" for a
+// postMessage handshake — that round-trip is unreliable on iOS Safari
+// (backgrounded workers get killed before the message arrives), which left
+// the update banner stuck forever. The page detects the takeover itself via
+// the controllerchange event instead.
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(PRECACHE_ASSETS))
+    caches.open(CACHE_VERSION).then((cache) => cache.addAll(PRECACHE_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -39,8 +44,4 @@ self.addEventListener('fetch', (event) => {
       })
       .catch(() => caches.match(PRECACHE_URL))
   );
-});
-
-self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });

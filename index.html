@@ -1554,41 +1554,28 @@ if (!localStorage.getItem('bogen_seen')) showAbout();
 // activeSession lives only in memory (not persisted), so a reload while a
 // pass is in progress would drop unsaved arrows — always ask, never force.
 if ('serviceWorker' in navigator) {
-  let waitingWorker = null;
   const updateBanner = document.getElementById('updateBanner');
   const updateBannerBtn = document.getElementById('updateBannerBtn');
-
-  function showUpdateBanner(worker) {
-    waitingWorker = worker;
-    updateBanner.classList.add('show');
-  }
+  // sw.js self-activates (skipWaiting) instead of sitting in a "waiting"
+  // state, so we just watch for the takeover rather than messaging a worker
+  // — postMessage to a waiting worker is unreliable on iOS Safari and left
+  // the old banner stuck forever.
+  const hadController = !!navigator.serviceWorker.controller;
 
   updateBannerBtn.addEventListener('click', () => {
     updateBannerBtn.disabled = true;
-    if (waitingWorker) waitingWorker.postMessage('SKIP_WAITING');
-    // Navigations are network-first regardless of which worker ends up in
-    // control, so don't leave the user stuck if postMessage/controllerchange
-    // never resolves (e.g. an already-superseded waiting worker).
-    setTimeout(() => location.reload(), 300);
+    location.reload();
   });
 
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    location.reload();
+    // A fresh install also fires this once (no controller -> first controller)
+    // — that's not an "update" the user needs to act on, so only prompt when
+    // an already-controlled page got handed to a newer worker.
+    if (hadController) updateBanner.classList.add('show');
   });
 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then((reg) => {
-      if (reg.waiting && reg.active) showUpdateBanner(reg.waiting);
-
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && reg.active) {
-            showUpdateBanner(newWorker);
-          }
-        });
-      });
-
       // iOS standalone apps never run in the background, so the only
       // reliable moment to check for a new version is when the app is
       // brought back to the foreground.
